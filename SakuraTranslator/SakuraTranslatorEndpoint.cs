@@ -155,6 +155,26 @@ namespace SakuraTranslator
             context.Complete(translatedText);
         }
 
+        private static string ConvertToTraditionalChinese(string simplifiedChineseText)
+        {
+            string url = "https://api.zhconvert.org/convert?text=" + simplifiedChineseText + "&converter=Taiwan";
+
+            HttpWebRequest conversionRequest = (HttpWebRequest) WebRequest.Create(url);
+            conversionRequest.Method = "GET";
+
+            WebResponse conversionResponse = conversionRequest.GetResponse();
+
+            using(Stream stream = conversionResponse.GetResponseStream())
+            {
+                using(StreamReader reader = new StreamReader(stream))
+                {
+                    String conversionResult = reader.ReadToEnd();
+                    JObject jsonConversionResult = JObject.Parse(conversionResult);
+                    return jsonConversionResult["data"]["text"].ToString();
+                }
+            }
+        }
+
         private IEnumerator TranslateLine(string line, StringBuilder translatedTextBuilder)
         {
             // 构建请求JSON
@@ -191,6 +211,8 @@ namespace SakuraTranslator
                 }
             }
 
+            responseText = ConvertToTraditionalChinese(responseText);
+
             // 手动解析JSON响应
             var startIndex = responseText.IndexOf("\"content\":") + 10;
             var endIndex = responseText.IndexOf(",", startIndex);
@@ -217,8 +239,8 @@ namespace SakuraTranslator
             string json;
             if (_apiType == "Qwen")
             {
-                json = $"{{\"prompt\":\"<|im_start|>system\\n你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，" +
-                $"并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。<|im_end|>\\n<|im_start|>user\\n将下面的日文文本翻译成中文：" +
+                json = $"{{\"prompt\":\"<|im_start|>system\\n你是輕小說翻譯模型，可以流暢通順地以日本輕小說的風格將日文翻譯成繁體中文，" +
+                $"並聯繫上下文正確使用人稱代名詞，不擅自添加原文中沒有的代名詞。<|im_end|>\\n<|im_start|>user\\n將下面的日文文字翻譯成中文：" +
                 $"{EscapeJsonString(line)}<|im_end|>\\n<|im_start|>assistant\\n\",\"n_predict\":1024,\"temperature\":0.1,\"top_p\":0.3,\"repeat_penalty\":1," +
                 $"\"frequency_penalty\":0.2,\"top_k\":40,\"seed\":-1}}";
             }
@@ -232,7 +254,7 @@ namespace SakuraTranslator
             }
             else
             {
-                json = $"{{\"frequency_penalty\": 0.2, \"n_predict\": 1000, \"prompt\": \"<reserved_106>将下面的日文文本翻译成中文：{EscapeJsonString(line)}<reserved_107>\", \"repeat_penalty\": 1, \"temperature\": 0.1, \"top_k\": 40, \"top_p\": 0.3}}";
+                json = $"{{\"frequency_penalty\": 0.2, \"n_predict\": 1000, \"prompt\": \"<reserved_106>將下面的日文文字翻譯成中文：{EscapeJsonString(line)}<reserved_107>\", \"repeat_penalty\": 1, \"temperature\": 0.1, \"top_k\": 40, \"top_p\": 0.3}}";
             }
 
             return json;
@@ -248,7 +270,7 @@ namespace SakuraTranslator
                     new PromptMessage
                     {
                         Role = "system",
-                        Content = "你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，注意不要擅自添加原文中没有的代词，也不要擅自增加或减少换行。"
+                        Content = "你是一個輕小說翻譯模型，可以流暢通順地以日本輕小說的風格將日文翻譯成繁體中文，並聯繫上下文正確使用人稱代詞，注意不要擅自添加原文中沒有的代詞，也不要擅自增加或減少換行。"
                     }
                 };
                 string dictStr;
@@ -274,7 +296,7 @@ namespace SakuraTranslator
                     messages.Add(new PromptMessage
                     {
                         Role = "user",
-                        Content = $"将下面的日文文本翻译成中文：{line}"
+                        Content = $"將下面的日文文字翻譯成中文：{line}"
                     });
                 }
                 else
@@ -282,7 +304,7 @@ namespace SakuraTranslator
                     messages.Add(new PromptMessage
                     {
                         Role = "user",
-                        Content = $"根据以下术语表：\n{dictStr}\n将下面的日文文本根据上述术语表的对应关系和注释翻译成中文：{line}"
+                        Content = $"根據以下術語表：\n{dictStr}\n將下面的日文文本根據上述術語表的對應關係和註釋翻譯成中文：{line}"
                     });
                 }
                 messagesStr = SerializePromptMessages(messages);
@@ -292,11 +314,11 @@ namespace SakuraTranslator
                 messagesStr = "[" +
                        $"{{" +
                        $"\"role\": \"system\"," +
-                       $"\"content\": \"你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，不擅自添加原文中没有的代词。\"" +
+                       $"\"content\": \"你是一個輕小說翻譯模型，可以流暢通順地以日本輕小說的風格將日文翻譯成繁體中文，並聯繫上下文正確使用人稱代詞，注意不要擅自添加原文中沒有的代詞，也不要擅自增加或減少換行。\"" +
                        $"}}," +
                                 $"{{" +
                                 $"\"role\": \"user\"," +
-                       $"\"content\": \"将下面的日文文本翻译成中文：{EscapeJsonString(line)}\"" +
+                       $"\"content\": \"將下面的日文文字翻譯成中文：{EscapeJsonString(line)}\"" +
                        $"}}" +
                        $"]";
             }
@@ -324,7 +346,7 @@ namespace SakuraTranslator
                     new PromptMessage
                     {
                         Role = "system",
-                        Content = "你是一个轻小说翻译模型，可以流畅通顺地使用给定的术语表以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，注意不要混淆使役态和被动态的主语和宾语，不要擅自添加原文中没有的代词，也不要擅自增加或减少换行。"
+                        Content = "你是一個輕小說翻譯模型，可以流暢通順地使用給定的術語表以日本輕小說的風格將日文翻譯成繁體中文，並聯繫上下文正確使用人稱代詞，注意不要混淆使役態和被動態的主語和受詞，不要擅自添加原文中沒有的代名詞，也不要擅自增加或減少換行。"
                     }
                 };
             string dictStr;
@@ -352,8 +374,8 @@ namespace SakuraTranslator
             messages.Add(new PromptMessage
             {
                 Role = "user",
-                Content = $"根据以下术语表（可以为空）：\n{dictStr}\n\n" +
-                          $"将下面的日文文本根据上述术语表的对应关系和备注翻译成中文：{line}"
+                Content = $"根據以下術語表（可以為空）：\n{dictStr}\n\n" +
+                          $"將下面的日文文本根據上述術語表的對應關係和備註翻譯成中文：{line}"
             });
             messagesStr = SerializePromptMessages(messages);
 
